@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+  <!-- Background Card -->
+  <rect width="512" height="512" rx="128" fill="url(#blueGrad)" />
+  
+  <!-- Outer Home Outline -->
+  <path d="M256 96 L108 224 L144 224 L144 400 L216 400 L216 304 L296 304 L296 400 L368 400 L368 224 L404 224 Z" 
+        fill="none" stroke="#ffffff" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+  
+  <!-- Indian Rupee Symbol inside -->
+  <g transform="translate(196, 175) scale(1.05)" filter="url(#shadow)">
+    <!-- Top horizontal bar 1 -->
+    <line x1="0" y1="20" x2="115" y2="20" stroke="#ffffff" stroke-width="22" stroke-linecap="round" />
+    <!-- Horizontal bar 2 -->
+    <line x1="0" y1="56" x2="115" y2="56" stroke="#ffffff" stroke-width="22" stroke-linecap="round" />
+    <!-- Loop and Stem -->
+    <path d="M35 20 L35 140 C55 140 85 130 85 96 C85 65 58 56 35 56 M30 115 L95 190" 
+          fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>
