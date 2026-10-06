@@ -12,6 +12,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.temp
+supabase/.temp
 
 # Environment variables
 .env

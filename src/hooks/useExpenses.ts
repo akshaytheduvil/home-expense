@@ -49,6 +49,28 @@ export function useExpenses() {
     }
 
     try {
+      // Auto-migrate any local expenses stored on the device before Supabase was connected
+      const local = getLocalExpenses()
+      if (local && local.length > 0) {
+        const toUpload = local
+          .filter(e => e.amount && Number(e.amount) > 0 && e.category && e.date)
+          .map(e => ({
+            date: e.date,
+            category: e.category,
+            product_name: e.product_name || null,
+            amount: Number(e.amount),
+            worker_name: e.worker_name || null,
+            payment_mode: e.payment_mode || 'Cash',
+            description: e.description || null,
+            notes: e.notes || null,
+          }))
+
+        if (toUpload.length > 0) {
+          await supabase.from('expenses').insert(toUpload)
+        }
+        localStorage.setItem(STORAGE_KEYS.LOCAL_EXPENSES, JSON.stringify([]))
+      }
+
       const { data, error } = await supabase
         .from('expenses')
         .select('*')
