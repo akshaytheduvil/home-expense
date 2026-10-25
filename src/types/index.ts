@@ -1,8 +1,16 @@
+export interface Account {
+  id: string
+  name: string
+  pin: string
+  isDefault?: boolean
+}
+
 export interface Worker {
   id: string
   name: string
   phone?: string | null
   notes?: string | null
+  account_id?: string | null
   created_at?: string
 }
 
@@ -16,6 +24,7 @@ export interface Expense {
   payment_mode?: string | null
   description?: string | null
   notes?: string | null
+  account_id?: string | null
   created_at?: string
 }
 

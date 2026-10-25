@@ -1,7 +1,25 @@
+import { Account } from '@/types'
+
 export const APP_PIN = '3735'
+
+export const DEFAULT_ACCOUNTS: Account[] = [
+  {
+    id: 'primary',
+    name: 'My Account',
+    pin: '3735',
+    isDefault: true,
+  },
+  {
+    id: 'friend',
+    name: "Friend's Account",
+    pin: '5555',
+  },
+]
 
 export const STORAGE_KEYS = {
   AUTH: 'home_expense_auth',
+  ACTIVE_ACCOUNT: 'home_expense_active_account',
+  ACCOUNTS: 'home_expense_accounts',
   CUSTOM_PIN: 'home_expense_custom_pin',
   THEME: 'home_expense_theme',
   LOCAL_EXPENSES: 'home_expense_local_data',

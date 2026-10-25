@@ -2,21 +2,42 @@ import { useState, useEffect, useCallback } from 'react'
 import { Expense } from '@/types'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { STORAGE_KEYS } from '@/lib/constants'
+import { useAuth } from '@/context/AuthContext'
+
+function matchesAccount(item: any, accId: string): boolean {
+  if (item.account_id) {
+    return item.account_id === accId
+  }
+  // Fallback for pre-migration data
+  if (accId === 'primary') {
+    return !item.notes?.startsWith('[acc:')
+  }
+  return item.notes?.startsWith(`[acc:${accId}]`)
+}
+
+function cleanNotes(notes?: string | null): string | null {
+  if (!notes) return null
+  return notes.replace(/^\[acc:[^\]]+\]\s*/, '') || null
+}
 
 export function useExpenses() {
+  const { currentAccount } = useAuth()
+  const accountId = currentAccount?.id || 'primary'
+
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [loading, setLoading] = useState(true)
   const [isLive, setIsLive] = useState(false)
 
+  const storageKey = `${STORAGE_KEYS.LOCAL_EXPENSES}_${accountId}`
+
   // Local storage management
-  const getLocalExpenses = (): Expense[] => {
+  const getLocalExpenses = useCallback((): Expense[] => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.LOCAL_EXPENSES)
+      const saved = localStorage.getItem(storageKey)
       if (saved) {
         const parsed = JSON.parse(saved)
-        // Purge old demo seeds if present
         if (Array.isArray(parsed) && parsed.some((e: any) => e.id?.startsWith('exp-'))) {
-          localStorage.setItem(STORAGE_KEYS.LOCAL_EXPENSES, JSON.stringify([]))
+          localStorage.setItem(storageKey, JSON.stringify([]))
           return []
         }
         return parsed
@@ -24,18 +45,18 @@ export function useExpenses() {
     } catch (e) {
       console.warn('Failed to parse local expenses:', e)
     }
-    localStorage.setItem(STORAGE_KEYS.LOCAL_EXPENSES, JSON.stringify([]))
+    localStorage.setItem(storageKey, JSON.stringify([]))
     return []
-  }
+  }, [storageKey])
 
-  const saveLocalExpenses = (items: Expense[]) => {
+  const saveLocalExpenses = useCallback((items: Expense[]) => {
     try {
-      localStorage.setItem(STORAGE_KEYS.LOCAL_EXPENSES, JSON.stringify(items))
+      localStorage.setItem(storageKey, JSON.stringify(items))
     } catch (e) {
       console.warn('Failed to save local expenses:', e)
     }
     setExpenses(items)
-  }
+  }, [storageKey])
 
   const fetchExpenses = useCallback(async () => {
     setLoading(true)
@@ -49,34 +70,40 @@ export function useExpenses() {
     }
 
     try {
-      // Auto-migrate any local expenses stored on the device before Supabase was connected
-      const local = getLocalExpenses()
-      if (local && local.length > 0) {
-        const toUpload = local
-          .filter(e => e.amount && Number(e.amount) > 0 && e.category && e.date)
-          .map(e => ({
-            date: e.date,
-            category: e.category,
-            product_name: e.product_name || null,
-            amount: Number(e.amount),
-            worker_name: e.worker_name || null,
-            payment_mode: e.payment_mode || 'Cash',
-            description: e.description || null,
-            notes: e.notes || null,
-          }))
-
-        if (toUpload.length > 0) {
-          await supabase.from('expenses').insert(toUpload)
-        }
-        localStorage.setItem(STORAGE_KEYS.LOCAL_EXPENSES, JSON.stringify([]))
+      // 1. Query with account_id filter if column exists
+      let query = supabase.from('expenses').select('*')
+      if (accountId === 'primary') {
+        query = query.or('account_id.eq.primary,account_id.is.null')
+      } else {
+        query = query.eq('account_id', accountId)
       }
 
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .order('date', { ascending: false })
+      let { data, error } = await query.order('date', { ascending: false })
 
-      if (error) throw error
+      // 2. Fallback if account_id column is not yet in Postgres schema
+      if (error && error.code === 'PGRST204') {
+        const fallback = await supabase
+          .from('expenses')
+          .select('*')
+          .order('date', { ascending: false })
+
+        if (fallback.error) throw fallback.error
+
+        data = (fallback.data || [])
+          .filter((item) => matchesAccount(item, accountId))
+          .map((item) => ({
+            ...item,
+            notes: cleanNotes(item.notes),
+          }))
+      } else if (error) {
+        throw error
+      } else if (data) {
+        data = data.map((item) => ({
+          ...item,
+          notes: cleanNotes(item.notes),
+        }))
+      }
+
       setExpenses(data || [])
       setIsLive(true)
     } catch (err) {
@@ -87,14 +114,14 @@ export function useExpenses() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [accountId, getLocalExpenses])
 
   useEffect(() => {
     fetchExpenses()
 
-    // Listen for cross-tab updates in local storage mode
+    // Listen for cross-tab updates
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEYS.LOCAL_EXPENSES && e.newValue) {
+      if (e.key === storageKey && e.newValue) {
         try {
           setExpenses(JSON.parse(e.newValue))
         } catch {}
@@ -105,23 +132,37 @@ export function useExpenses() {
     // Setup Supabase Real-Time Channel
     if (isSupabaseConfigured) {
       const channel = supabase
-        .channel('expenses-changes')
+        .channel(`expenses-changes-${accountId}`)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'expenses' },
           (payload) => {
             if (payload.eventType === 'INSERT') {
-              const newRecord = payload.new as Expense
+              const newRecord = payload.new as any
+              if (!matchesAccount(newRecord, accountId)) return
+
+              const cleaned: Expense = {
+                ...newRecord,
+                notes: cleanNotes(newRecord.notes),
+              }
               setExpenses((prev) => {
-                if (prev.some((e) => e.id === newRecord.id)) return prev
-                return [newRecord, ...prev].sort(
+                if (prev.some((e) => e.id === cleaned.id)) return prev
+                return [cleaned, ...prev].sort(
                   (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
                 )
               })
             } else if (payload.eventType === 'UPDATE') {
-              const updated = payload.new as Expense
+              const updated = payload.new as any
+              if (!matchesAccount(updated, accountId)) {
+                setExpenses((prev) => prev.filter((e) => e.id !== updated.id))
+                return
+              }
+              const cleaned: Expense = {
+                ...updated,
+                notes: cleanNotes(updated.notes),
+              }
               setExpenses((prev) =>
-                prev.map((e) => (e.id === updated.id ? updated : e))
+                prev.map((e) => (e.id === cleaned.id ? cleaned : e))
               )
             } else if (payload.eventType === 'DELETE') {
               const deleted = payload.old as { id: string }
@@ -142,7 +183,7 @@ export function useExpenses() {
     return () => {
       window.removeEventListener('storage', handleStorageChange)
     }
-  }, [fetchExpenses])
+  }, [accountId, fetchExpenses, storageKey])
 
   const addExpense = async (
     expenseData: Omit<Expense, 'id' | 'created_at'>
@@ -150,6 +191,7 @@ export function useExpenses() {
     if (!isSupabaseConfigured) {
       const newExpense: Expense = {
         ...expenseData,
+        account_id: accountId,
         id: 'exp_' + Date.now(),
         created_at: new Date().toISOString(),
       }
@@ -160,22 +202,53 @@ export function useExpenses() {
       return newExpense
     }
 
-    const { data, error } = await supabase
+    // Try inserting with native account_id column
+    const insertPayload: any = {
+      ...expenseData,
+      account_id: accountId,
+    }
+
+    let { data, error } = await supabase
       .from('expenses')
-      .insert([expenseData])
+      .insert([insertPayload])
       .select()
       .single()
 
-    if (error) throw error
+    // Fallback if column does not exist yet
+    if (error && error.code === 'PGRST204') {
+      const tag = accountId === 'primary' ? '' : `[acc:${accountId}] `
+      const notes = (tag + (expenseData.notes || '')).trim() || null
 
-    // Optimistically update local state
+      const fallbackPayload = {
+        date: expenseData.date,
+        category: expenseData.category,
+        product_name: expenseData.product_name || null,
+        amount: expenseData.amount,
+        worker_name: expenseData.worker_name || null,
+        payment_mode: expenseData.payment_mode || 'Cash',
+        description: expenseData.description || null,
+        notes,
+      }
+
+      const res = await supabase.from('expenses').insert([fallbackPayload]).select().single()
+      if (res.error) throw res.error
+      data = { ...res.data, notes: cleanNotes(res.data.notes) }
+    } else if (error) {
+      throw error
+    }
+
+    const cleanedData: Expense = {
+      ...data,
+      notes: cleanNotes(data.notes),
+    }
+
     setExpenses((prev) => {
-      if (prev.some((e) => e.id === data.id)) return prev
-      return [data, ...prev].sort(
+      if (prev.some((e) => e.id === cleanedData.id)) return prev
+      return [cleanedData, ...prev].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
       )
     })
-    return data
+    return cleanedData
   }
 
   const updateExpense = async (
@@ -188,10 +261,19 @@ export function useExpenses() {
       return
     }
 
-    const { error } = await supabase.from('expenses').update(updates).eq('id', id)
+    let updatePayload: any = { ...updates }
+    if (accountId !== 'primary' && updates.notes !== undefined) {
+      updatePayload.notes = `[acc:${accountId}] ${updates.notes || ''}`.trim() || null
+    }
+
+    const { error } = await supabase.from('expenses').update(updatePayload).eq('id', id)
     if (error) throw error
 
-    setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)))
+    setExpenses((prev) =>
+      prev.map((e) =>
+        e.id === id ? { ...e, ...updates, notes: cleanNotes(updates.notes ?? e.notes) } : e
+      )
+    )
   }
 
   const deleteExpense = async (id: string): Promise<void> => {
@@ -213,8 +295,38 @@ export function useExpenses() {
       return
     }
 
-    const { error } = await supabase.from('expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-    if (error) throw error
+    // Strictly scope delete operation to active account ONLY
+    if (accountId === 'primary') {
+      const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .or('account_id.eq.primary,account_id.is.null')
+
+      // Fallback if column not yet in DB: delete items for this account
+      if (error && error.code === 'PGRST204') {
+        const ids = expenses.map((e) => e.id)
+        if (ids.length > 0) {
+          await supabase.from('expenses').delete().in('id', ids)
+        }
+      } else if (error) {
+        throw error
+      }
+    } else {
+      const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('account_id', accountId)
+
+      if (error && error.code === 'PGRST204') {
+        const ids = expenses.map((e) => e.id)
+        if (ids.length > 0) {
+          await supabase.from('expenses').delete().in('id', ids)
+        }
+      } else if (error) {
+        throw error
+      }
+    }
+
     setExpenses([])
   }
 
@@ -228,7 +340,10 @@ export function useExpenses() {
       if (!item.date || !item.category || !item.amount || item.amount <= 0) {
         errors.push(`Row ${idx + 1}: Invalid date, category, or amount`)
       } else {
-        validItems.push(item)
+        validItems.push({
+          ...item,
+          account_id: accountId,
+        })
       }
     })
 
@@ -250,7 +365,25 @@ export function useExpenses() {
     }
 
     const { error } = await supabase.from('expenses').insert(validItems)
-    if (error) throw error
+
+    if (error && error.code === 'PGRST204') {
+      // Fallback if column not yet added
+      const tag = accountId === 'primary' ? '' : `[acc:${accountId}] `
+      const fallbackItems = validItems.map((v) => ({
+        date: v.date,
+        category: v.category,
+        product_name: v.product_name || null,
+        amount: v.amount,
+        worker_name: v.worker_name || null,
+        payment_mode: v.payment_mode || 'Cash',
+        description: v.description || null,
+        notes: (tag + (v.notes || '')).trim() || null,
+      }))
+      const fallbackRes = await supabase.from('expenses').insert(fallbackItems)
+      if (fallbackRes.error) throw fallbackRes.error
+    } else if (error) {
+      throw error
+    }
 
     await fetchExpenses()
     return { inserted: validItems.length, errors }

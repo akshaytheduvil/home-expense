@@ -4,7 +4,7 @@ import { ShieldCheck, Lock, Delete } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 export const Login: React.FC = () => {
-  const { isAuthed, login } = useAuth()
+  const { isAuthed, login, accounts } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -23,8 +23,8 @@ export const Login: React.FC = () => {
   const handleAttemptLogin = (enteredPin: string) => {
     if (enteredPin.length !== 4) return
 
-    const success = login(enteredPin)
-    if (success) {
+    const result = login(enteredPin)
+    if (result.success) {
       navigate(from, { replace: true })
     } else {
       setError('Incorrect PIN')
@@ -84,9 +84,22 @@ export const Login: React.FC = () => {
             </span>
           </div>
 
-          <p className="text-xs text-center text-muted-foreground mb-6">
-            Default PIN: <span className="font-mono font-semibold text-foreground">3735</span>
-          </p>
+          <div className="flex flex-col items-center justify-center space-y-1 mb-6 text-xs text-muted-foreground">
+            <span className="text-[11px] text-muted-foreground">Select or enter 4-digit PIN for your account:</span>
+            <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+              {accounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  type="button"
+                  onClick={() => handleAttemptLogin(acc.pin)}
+                  className="font-mono text-[11px] bg-secondary/80 hover:bg-secondary text-foreground px-2.5 py-1 rounded-md border border-border transition-colors cursor-pointer shadow-xs active:scale-95"
+                >
+                  <strong className="text-primary font-bold">{acc.pin}</strong>
+                  <span className="ml-1 opacity-80">({acc.name})</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Hidden/Direct Input for physical keyboards & mobile autofill */}
           <div className="flex justify-center mb-4">

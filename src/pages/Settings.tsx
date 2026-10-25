@@ -8,7 +8,6 @@ import {
   Database,
   Moon,
   Sun,
-  KeyRound,
   Download,
   Upload,
   Trash2,
@@ -18,6 +17,8 @@ import {
   FileSpreadsheet,
   Smartphone,
   Info,
+  User,
+  Users,
 } from 'lucide-react'
 import { useSettings } from '@/hooks/useSettings'
 import { useWorkers } from '@/hooks/useWorkers'
@@ -27,26 +28,38 @@ import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { exportToCsv, downloadJson } from '@/lib/utils'
+import { exportToCsv, downloadJson, formatCurrency, cn } from '@/lib/utils'
+import { parseAndCleanCsv } from '@/lib/csvParser'
 import { toast } from 'sonner'
 
 export const Settings: React.FC = () => {
   const navigate = useNavigate()
   const { categories, paymentModes, addCategory, removeCategory, addPaymentMode, removePaymentMode } = useSettings()
-  const { workers } = useWorkers()
+  const { workers, ensureWorkersExist } = useWorkers()
   const { expenses, bulkImportExpenses, clearAllExpenses } = useExpenses()
   const { theme, toggleTheme } = useTheme()
-  const { currentPin, setNewPin } = useAuth()
+  const {
+    currentAccount,
+    accounts,
+    switchAccount,
+    updateAccount,
+    createAccount,
+    deleteAccount,
+  } = useAuth()
 
   // Dynamic add states
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newModeName, setNewModeName] = useState('')
 
-  // PIN change states
-  const [newPinInput, setNewPinInput] = useState('')
-  const [confirmPinInput, setConfirmPinInput] = useState('')
+  // Multi-account states
+  const [newAccountName, setNewAccountName] = useState('')
+  const [newAccountPin, setNewAccountPin] = useState('')
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
+  const [editAccName, setEditAccName] = useState('')
+  const [editAccPin, setEditAccPin] = useState('')
 
   // Danger delete modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
@@ -107,24 +120,24 @@ export const Settings: React.FC = () => {
     setNewModeName('')
   }
 
-  // PIN handler
-  const handleUpdatePin = (e: React.FormEvent) => {
+  // Multi-Account Action handlers
+  const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!/^\d{4}$/.test(newPinInput)) {
+    if (!newAccountName.trim()) {
+      toast.error('Account name is required')
+      return
+    }
+    if (!/^\d{4}$/.test(newAccountPin)) {
       toast.error('PIN must be exactly 4 digits')
       return
     }
-    if (newPinInput !== confirmPinInput) {
-      toast.error('Confirmation PIN does not match')
-      return
-    }
-    const ok = setNewPin(newPinInput)
-    if (ok) {
-      toast.success('4-digit PIN updated successfully!')
-      setNewPinInput('')
-      setConfirmPinInput('')
+    const created = await createAccount(newAccountName.trim(), newAccountPin)
+    if (created) {
+      toast.success(`Account "${created.name}" created with PIN ${created.pin}!`)
+      setNewAccountName('')
+      setNewAccountPin('')
     } else {
-      toast.error('Failed to update PIN')
+      toast.error('Failed to create account (PIN may already be in use)')
     }
   }
 
@@ -166,72 +179,76 @@ export const Settings: React.FC = () => {
     toast.success('Full database backup JSON downloaded')
   }
 
+  // Handle Sample CSV Template Download
+  const handleDownloadTemplate = () => {
+    const sampleRows = [
+      {
+        Date: '2026-10-06',
+        Work: 'Labour Padav',
+        'Worker Name': 'Mani',
+        Expense: 2100,
+        'Mode of Payment': 'Cash',
+        Category: 'Renovation',
+      },
+      {
+        Date: '2026-10-06',
+        Work: 'Paint',
+        'Worker Name': 'Asees',
+        Expense: 40000,
+        'Mode of Payment': 'Cash',
+        Category: 'Painting',
+      },
+      {
+        Date: '2026-10-06',
+        Work: 'Wiring materials',
+        'Worker Name': 'Sunoop',
+        Expense: 1750,
+        'Mode of Payment': 'UPI',
+        Category: 'Renovation',
+      },
+    ]
+    exportToCsv('Home_Expense_Template.csv', sampleRows)
+    toast.success('Sample CSV template downloaded')
+  }
+
   // Parse CSV text and trigger import
   const parseAndImportCsv = async (rawCsv: string) => {
-    const lines = rawCsv
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean)
-
-    if (lines.length < 2) {
-      toast.error('CSV data must contain a header line and at least one data row')
-      return
-    }
-
-    // Expected header: date,category,product,amount,worker,mode,desc
-    // or standard column names
-    const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/"/g, ''))
-
-    const parsedRows: any[] = []
-    const parseErrors: string[] = []
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i]
-      // Split with comma awareness
-      const parts = line.split(',').map((p) => p.trim().replace(/^"|"$/g, ''))
-
-      const rowObj: Record<string, string> = {}
-      headers.forEach((h, idx) => {
-        rowObj[h] = parts[idx] || ''
-      })
-
-      const date = rowObj['date']
-      const category = rowObj['category']
-      const product = rowObj['product'] || rowObj['product_name'] || null
-      const amount = parseFloat(rowObj['amount'])
-      const worker = rowObj['worker'] || rowObj['worker_name'] || null
-      const mode = rowObj['mode'] || rowObj['payment_mode'] || 'Cash'
-      const desc = rowObj['desc'] || rowObj['description'] || null
-
-      if (!date || isNaN(amount) || amount <= 0 || !category) {
-        parseErrors.push(`Row ${i + 1}: Invalid data (${line})`)
-      } else {
-        parsedRows.push({
-          date,
-          category,
-          product_name: product,
-          amount,
-          worker_name: worker,
-          payment_mode: mode,
-          description: desc,
-          notes: null,
-        })
-      }
-    }
+    const { expenses: parsedRows, workers: foundWorkers, totalAmount, errors: parseErrors } =
+      parseAndCleanCsv(rawCsv, categories)
 
     if (parsedRows.length === 0) {
       setImportStatus({ inserted: 0, errors: parseErrors })
-      toast.error('No valid rows could be imported')
+      toast.error('No valid rows could be parsed from the CSV data')
       return
     }
 
-    const res = await bulkImportExpenses(parsedRows)
-    const combinedErrors = [...parseErrors, ...res.errors]
-    setImportStatus({ inserted: res.inserted, errors: combinedErrors })
+    // Auto-register workers if any
+    if (foundWorkers.length > 0) {
+      try {
+        const addedCount = await ensureWorkersExist(foundWorkers)
+        if (addedCount > 0) {
+          toast.info(`Registered ${addedCount} new worker(s) in directory`)
+        }
+      } catch (wErr) {
+        console.warn('Worker auto-registration warning:', wErr)
+      }
+    }
 
-    if (res.inserted > 0) {
-      toast.success(`Successfully imported ${res.inserted} expense rows`)
-      setCsvText('')
+    try {
+      const res = await bulkImportExpenses(parsedRows)
+      const combinedErrors = [...parseErrors, ...res.errors]
+      setImportStatus({ inserted: res.inserted, errors: combinedErrors })
+
+      if (res.inserted > 0) {
+        toast.success(
+          `Successfully imported ${res.inserted} expenses (${formatCurrency(totalAmount)})!`
+        )
+        setCsvText('')
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Import failed'
+      toast.error(msg)
+      setImportStatus({ inserted: 0, errors: [msg] })
     }
   }
 
@@ -432,43 +449,221 @@ export const Settings: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* F. CHANGE PIN */}
-        <Card>
+        {/* F. MULTI-ACCOUNT & SECURITY */}
+        <Card className="md:col-span-2 shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base font-bold flex items-center space-x-2">
-              <KeyRound className="h-4 w-4 text-primary" />
-              <span>Security & 4-Digit PIN</span>
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Active PIN: <strong className="font-mono text-foreground">{currentPin}</strong>
-            </CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <CardTitle className="text-base font-bold flex items-center space-x-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  <span>Accounts & Security PINs</span>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Manage separate accounts. Expenses, workers, and categories are 100% isolated and never mix.
+                </CardDescription>
+              </div>
+              <Badge variant="blue" className="w-fit text-xs">
+                Active: {currentAccount.name}
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleUpdatePin} className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
+          <CardContent className="space-y-4">
+            {/* List of Accounts */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {accounts.map((acc) => {
+                const isActive = acc.id === currentAccount.id
+                const isEditing = editingAccountId === acc.id
+
+                return (
+                  <div
+                    key={acc.id}
+                    className={cn(
+                      'p-3.5 rounded-xl border transition-all flex flex-col justify-between space-y-3',
+                      isActive
+                        ? 'border-primary bg-primary/5 shadow-xs'
+                        : 'border-border bg-card hover:bg-accent/30'
+                    )}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-2.5">
+                        <div
+                          className={cn(
+                            'h-9 w-9 rounded-lg flex items-center justify-center font-bold text-sm shrink-0',
+                            isActive
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-secondary text-foreground'
+                          )}
+                        >
+                          <User className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-sm text-foreground flex items-center space-x-1.5">
+                            <span>{acc.name}</span>
+                            {isActive && (
+                              <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold px-1.5 py-0.5 rounded">
+                                ACTIVE
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            PIN: <strong className="font-mono text-foreground">{acc.pin}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-1">
+                        {!isEditing && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => {
+                              setEditingAccountId(acc.id)
+                              setEditAccName(acc.name)
+                              setEditAccPin(acc.pin)
+                            }}
+                          >
+                            Edit
+                          </Button>
+                        )}
+                        {!isActive && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-2.5 text-xs text-primary"
+                            onClick={() => {
+                              switchAccount(acc.id)
+                              toast.success(`Switched to "${acc.name}"`)
+                            }}
+                          >
+                            Switch
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Inline Edit Form for this Account */}
+                    {isEditing && (
+                      <div className="pt-2 border-t border-border space-y-2 animate-in fade-in">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-[10px]">Account Name</Label>
+                            <Input
+                              value={editAccName}
+                              onChange={(e) => setEditAccName(e.target.value)}
+                              placeholder="Account name"
+                              className="h-8 text-xs mt-0.5"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">4-Digit PIN</Label>
+                            <Input
+                              value={editAccPin}
+                              onChange={(e) =>
+                                setEditAccPin(e.target.value.replace(/\D/g, '').slice(0, 4))
+                              }
+                              maxLength={4}
+                              placeholder="PIN"
+                              className="h-8 text-xs font-mono mt-0.5"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1">
+                          {accounts.length > 1 && !acc.isDefault ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-[11px] text-destructive hover:bg-destructive/10"
+                              onClick={async () => {
+                                if (confirm(`Delete account "${acc.name}"?`)) {
+                                  await deleteAccount(acc.id)
+                                  setEditingAccountId(null)
+                                  toast.success('Account removed')
+                                }
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          ) : (
+                            <div />
+                          )}
+
+                          <div className="flex space-x-1.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => setEditingAccountId(null)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-7 px-2.5 text-xs"
+                              onClick={async () => {
+                                if (!editAccName.trim()) {
+                                  toast.error('Account name is required')
+                                  return
+                                }
+                                if (!/^\d{4}$/.test(editAccPin)) {
+                                  toast.error('PIN must be exactly 4 digits')
+                                  return
+                                }
+                                const ok = await updateAccount(acc.id, {
+                                  name: editAccName,
+                                  pin: editAccPin,
+                                })
+                                if (ok) {
+                                  setEditingAccountId(null)
+                                  toast.success(`Account "${editAccName}" updated`)
+                                } else {
+                                  toast.error('Failed to update account')
+                                }
+                              }}
+                            >
+                              Save
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Create New Account */}
+            <div className="pt-3 border-t border-border">
+              <h5 className="text-xs font-semibold text-foreground mb-2 flex items-center space-x-1.5">
+                <Plus className="h-3.5 w-3.5 text-primary" />
+                <span>Create New Account</span>
+              </h5>
+              <form onSubmit={handleCreateAccount} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Input
-                  type="password"
-                  inputMode="numeric"
+                  value={newAccountName}
+                  onChange={(e) => setNewAccountName(e.target.value)}
+                  placeholder="e.g. Friend, Office, Home 2"
+                  className="h-9 text-xs"
+                />
+                <Input
+                  value={newAccountPin}
+                  onChange={(e) =>
+                    setNewAccountPin(e.target.value.replace(/\D/g, '').slice(0, 4))
+                  }
                   maxLength={4}
                   placeholder="New 4-digit PIN"
-                  value={newPinInput}
-                  onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   className="h-9 text-xs font-mono"
                 />
-                <Input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={4}
-                  placeholder="Confirm PIN"
-                  value={confirmPinInput}
-                  onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  className="h-9 text-xs font-mono"
-                />
-              </div>
-              <Button type="submit" size="sm" className="w-full h-9">
-                Save New PIN
-              </Button>
-            </form>
+                <Button type="submit" size="sm" className="h-9 text-xs">
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  <span>Add Account</span>
+                </Button>
+              </form>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -527,26 +722,39 @@ export const Settings: React.FC = () => {
 
           {/* Bulk Import CSV Section */}
           <div className="pt-4 border-t border-border space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <h4 className="text-sm font-semibold flex items-center space-x-1.5">
                   <FileSpreadsheet className="h-4 w-4 text-blue-600" />
                   <span>Bulk Import Expenses (Paste or Upload CSV)</span>
                 </h4>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Format: <code className="bg-secondary px-1 py-0.5 rounded font-mono text-[11px]">date,category,product,amount,worker,mode,desc</code>
+                  Supports flexible headers: <code className="bg-secondary px-1 py-0.5 rounded font-mono text-[11px]">Date, Work, Worker Name, Expense, Mode of Payment</code>
                 </p>
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center space-x-1 text-xs"
-              >
-                <Upload className="h-3.5 w-3.5" />
-                <span>Upload .csv File</span>
-              </Button>
+              <div className="flex items-center space-x-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadTemplate}
+                  className="flex items-center space-x-1 text-xs"
+                  title="Download a starter CSV template"
+                >
+                  <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Download Template</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center space-x-1 text-xs"
+                >
+                  <Upload className="h-3.5 w-3.5 text-primary" />
+                  <span>Upload .csv File</span>
+                </Button>
+              </div>
               <input
                 type="file"
                 ref={fileInputRef}

@@ -1,0 +1,372 @@
+[
+  {
+    "date": "2026-09-28",
+    "category": "Painting",
+    "product_name": "Avdance",
+    "amount": 1000,
+    "worker_name": "Asees",
+    "payment_mode": "Cash",
+    "description": "Advance payment for painting",
+    "notes": "Avdance"
+  },
+  {
+    "date": "2026-10-05",
+    "category": "Painting",
+    "product_name": "Paint",
+    "amount": 40000,
+    "worker_name": "Asees",
+    "payment_mode": "Cash",
+    "description": "Paint purchase / materials",
+    "notes": "Paint"
+  },
+  {
+    "date": "2026-10-05",
+    "category": "Painting",
+    "product_name": "Koolie",
+    "amount": 10000,
+    "worker_name": "Asees",
+    "payment_mode": "Cash",
+    "description": "Painting labour / wages",
+    "notes": "Koolie"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "Labour Padav",
+    "amount": 2100,
+    "worker_name": "Mani",
+    "payment_mode": "Cash",
+    "description": "Masonry bricklaying labour",
+    "notes": "Labour Padav"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "Labour Padav",
+    "amount": 2100,
+    "worker_name": "Mani",
+    "payment_mode": "Cash",
+    "description": "Masonry bricklaying labour",
+    "notes": "Labour Padav"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "Cement",
+    "amount": 3105,
+    "worker_name": "Saneesh",
+    "payment_mode": "UPI",
+    "description": "Cement purchase",
+    "notes": "Cement"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "Bricks",
+    "amount": 3050,
+    "worker_name": "Sunil",
+    "payment_mode": "Cash",
+    "description": "Bricks supply",
+    "notes": "Bricks"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "Wiring materials",
+    "amount": 1750,
+    "worker_name": "Sunoop",
+    "payment_mode": "Cash",
+    "description": "Electrical wiring materials",
+    "notes": "Wiring materials"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "Wiring",
+    "amount": 2400,
+    "worker_name": "Sunoop",
+    "payment_mode": "Cash",
+    "description": "Electrical wiring work",
+    "notes": "Wiring"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "Labour Thepp",
+    "amount": 3100,
+    "worker_name": "Madhu",
+    "payment_mode": "Cash",
+    "description": "Plastering labour",
+    "notes": "Labour Thepp"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "Labour",
+    "amount": 3000,
+    "worker_name": "Pk Interlock",
+    "payment_mode": "Cash",
+    "description": "Interlock labour",
+    "notes": "Labour"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "Welding",
+    "amount": 3200,
+    "worker_name": "Shaji",
+    "payment_mode": "Cash",
+    "description": "Welding work",
+    "notes": "Welding"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "wiring materials",
+    "amount": 6465,
+    "worker_name": "Sunoop",
+    "payment_mode": "Cash",
+    "description": "Wiring materials purchase",
+    "notes": "wiring materials"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "Labour",
+    "amount": 900,
+    "worker_name": "Bhai",
+    "payment_mode": "Cash",
+    "description": "Labour wages",
+    "notes": "Labour"
+  },
+  {
+    "date": "2026-09-01",
+    "category": "Renovation",
+    "product_name": "Labour (virichath)",
+    "amount": 2000,
+    "worker_name": "Pk Interlock",
+    "payment_mode": "Cash",
+    "description": "Interlock paving labour",
+    "notes": "Labour (virichath)"
+  },
+  {
+    "date": "2026-09-05",
+    "category": "Renovation",
+    "product_name": "TV & Fans",
+    "amount": 40000,
+    "worker_name": "Homezo kunnumpuram",
+    "payment_mode": "Cash",
+    "description": "TV and Fans electrical equipment",
+    "notes": "TV & Fans"
+  },
+  {
+    "date": "2026-09-05",
+    "category": "Renovation",
+    "product_name": "Labour",
+    "amount": 3000,
+    "worker_name": "Pk Interlocks",
+    "payment_mode": "Cash",
+    "description": "Interlock labour work",
+    "notes": "Labour"
+  },
+  {
+    "date": "2026-09-05",
+    "category": "Renovation",
+    "product_name": "Wiring",
+    "amount": 5000,
+    "worker_name": "Sunoop",
+    "payment_mode": "Cash",
+    "description": "Wiring labour",
+    "notes": "Wiring"
+  },
+  {
+    "date": "2026-09-05",
+    "category": "Renovation",
+    "product_name": "Tank stant",
+    "amount": 7500,
+    "worker_name": "Shaji",
+    "payment_mode": "Cash",
+    "description": "Water tank stand fabrication",
+    "notes": "Tank stant"
+  },
+  {
+    "date": "2026-09-05",
+    "category": "Renovation",
+    "product_name": "Interial Meterials",
+    "amount": 27400,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Interior materials",
+    "notes": "Interial Meterials"
+  },
+  {
+    "date": "2026-09-06",
+    "category": "Renovation",
+    "product_name": "Interior",
+    "amount": 500,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Interior work",
+    "notes": "Interior"
+  },
+  {
+    "date": "2026-09-06",
+    "category": "Renovation",
+    "product_name": "Labour",
+    "amount": 1500,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Interior labour wages",
+    "notes": "Labour"
+  },
+  {
+    "date": "2026-09-07",
+    "category": "Renovation",
+    "product_name": "Interlock",
+    "amount": 75000,
+    "worker_name": "Pk Interlock",
+    "payment_mode": "Cash",
+    "description": "Interlock payment",
+    "notes": "Interlock"
+  },
+  {
+    "date": "2026-09-08",
+    "category": "Renovation",
+    "product_name": "Exoust Fan",
+    "amount": 1380,
+    "worker_name": "PMP Pukayoor",
+    "payment_mode": "UPI",
+    "description": "Exhaust fan purchase",
+    "notes": "Exoust Fan"
+  },
+  {
+    "date": "2026-09-08",
+    "category": "Renovation",
+    "product_name": "Labour",
+    "amount": 1100,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Interior labour wages",
+    "notes": "Labour"
+  },
+  {
+    "date": "2026-09-08",
+    "category": "Renovation",
+    "product_name": "switch board",
+    "amount": 630,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Switch board work",
+    "notes": "switch board"
+  },
+  {
+    "date": "2026-09-08",
+    "category": "Renovation",
+    "product_name": "Interior materials",
+    "amount": 1250,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Interior materials purchase",
+    "notes": "Interior materials"
+  },
+  {
+    "date": "2026-09-09",
+    "category": "Renovation",
+    "product_name": "Labour",
+    "amount": 1500,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Interior labour wages",
+    "notes": "Labour"
+  },
+  {
+    "date": "2026-09-09",
+    "category": "Renovation",
+    "product_name": "Interior materials",
+    "amount": 1250,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Interior materials purchase",
+    "notes": "Interior materials"
+  },
+  {
+    "date": "2026-09-10",
+    "category": "Renovation",
+    "product_name": "Interlock",
+    "amount": 78000,
+    "worker_name": "Pk Interlocks",
+    "payment_mode": "Cash",
+    "description": "Interlock tiles / materials",
+    "notes": "Interlock"
+  },
+  {
+    "date": "2026-09-10",
+    "category": "Renovation",
+    "product_name": "Labour",
+    "amount": 1500,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Interior labour wages",
+    "notes": "Labour"
+  },
+  {
+    "date": "2026-09-15",
+    "category": "Renovation",
+    "product_name": "Labour",
+    "amount": 1500,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Interior labour wages",
+    "notes": "Labour"
+  },
+  {
+    "date": "2026-09-17",
+    "category": "Renovation",
+    "product_name": "Labour",
+    "amount": 1500,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Interior labour wages",
+    "notes": "Labour"
+  },
+  {
+    "date": "2026-09-18",
+    "category": "Renovation",
+    "product_name": "Labour",
+    "amount": 1800,
+    "worker_name": "Pratheeshan",
+    "payment_mode": "Cash",
+    "description": "Interior labour wages",
+    "notes": "Labour"
+  },
+  {
+    "date": "2026-10-08",
+    "category": "Renovation",
+    "product_name": "Concrete work",
+    "amount": 10500,
+    "worker_name": "Sunil ap",
+    "payment_mode": "Cash",
+    "description": "Concrete work labour",
+    "notes": "Concrete work"
+  },
+  {
+    "date": "2026-10-03",
+    "category": "Other",
+    "product_name": "Gold",
+    "amount": 5500,
+    "worker_name": "Ani Paithrikam",
+    "payment_mode": "Cash",
+    "description": "Gold payment",
+    "notes": "Gold"
+  },
+  {
+    "date": "2026-10-01",
+    "category": "Other",
+    "product_name": "Adharam",
+    "amount": 4000,
+    "worker_name": "Ubaid Chemmad",
+    "payment_mode": "Cash",
+    "description": "Document / Adharam registration fee",
+    "notes": "Adharam"
+  }
+]

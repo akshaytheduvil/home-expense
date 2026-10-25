@@ -1,35 +1,46 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { DEFAULT_CATEGORIES, DEFAULT_PAYMENT_MODES, STORAGE_KEYS } from '@/lib/constants'
+import { useAuth } from '@/context/AuthContext'
 
 export function useSettings() {
+  const { currentAccount } = useAuth()
+  const accountId = currentAccount?.id || 'primary'
+
+  const catKey = accountId === 'primary' ? 'categories' : `categories_${accountId}`
+  const modeKey = accountId === 'primary' ? 'payment_modes' : `payment_modes_${accountId}`
+  const storageKey = `${STORAGE_KEYS.LOCAL_SETTINGS}_${accountId}`
+
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES)
   const [paymentModes, setPaymentModes] = useState<string[]>(DEFAULT_PAYMENT_MODES)
   const [loading, setLoading] = useState(true)
 
-  const loadLocalSettings = () => {
+  const loadLocalSettings = useCallback(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.LOCAL_SETTINGS)
+      const saved = localStorage.getItem(storageKey)
       if (saved) {
         const parsed = JSON.parse(saved)
         if (parsed.categories) setCategories(parsed.categories)
         if (parsed.paymentModes) setPaymentModes(parsed.paymentModes)
+        return
       }
     } catch (e) {
       console.warn('Failed to parse local settings:', e)
     }
-  }
+    setCategories(DEFAULT_CATEGORIES)
+    setPaymentModes(DEFAULT_PAYMENT_MODES)
+  }, [storageKey])
 
-  const saveLocalSettings = (cats: string[], modes: string[]) => {
+  const saveLocalSettings = useCallback((cats: string[], modes: string[]) => {
     try {
       localStorage.setItem(
-        STORAGE_KEYS.LOCAL_SETTINGS,
+        storageKey,
         JSON.stringify({ categories: cats, paymentModes: modes })
       )
     } catch (e) {
       console.warn('Failed to save local settings:', e)
     }
-  }
+  }, [storageKey])
 
   const fetchSettings = useCallback(async () => {
     setLoading(true)
@@ -40,18 +51,27 @@ export function useSettings() {
     }
 
     try {
-      const { data, error } = await supabase.from('settings').select('*')
+      const { data, error } = await supabase
+        .from('settings')
+        .select('*')
+        .in('key', [catKey, modeKey])
+
       if (error) throw error
 
       if (data && data.length > 0) {
-        const catSetting = data.find(s => s.key === 'categories')
-        const modeSetting = data.find(s => s.key === 'payment_modes')
+        const catSetting = data.find((s) => s.key === catKey)
+        const modeSetting = data.find((s) => s.key === modeKey)
 
         if (catSetting && Array.isArray(catSetting.value)) {
           setCategories(catSetting.value)
+        } else {
+          setCategories(DEFAULT_CATEGORIES)
         }
+
         if (modeSetting && Array.isArray(modeSetting.value)) {
           setPaymentModes(modeSetting.value)
+        } else {
+          setPaymentModes(DEFAULT_PAYMENT_MODES)
         }
       } else {
         loadLocalSettings()
@@ -62,7 +82,7 @@ export function useSettings() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [catKey, modeKey, loadLocalSettings])
 
   useEffect(() => {
     fetchSettings()
@@ -76,7 +96,10 @@ export function useSettings() {
       try {
         await supabase
           .from('settings')
-          .upsert({ key: 'categories', value: newCats, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+          .upsert(
+            { key: catKey, value: newCats, updated_at: new Date().toISOString() },
+            { onConflict: 'key' }
+          )
       } catch (err) {
         console.warn('Failed to update categories on Supabase:', err)
       }
@@ -91,7 +114,10 @@ export function useSettings() {
       try {
         await supabase
           .from('settings')
-          .upsert({ key: 'payment_modes', value: newModes, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+          .upsert(
+            { key: modeKey, value: newModes, updated_at: new Date().toISOString() },
+            { onConflict: 'key' }
+          )
       } catch (err) {
         console.warn('Failed to update payment_modes on Supabase:', err)
       }
@@ -106,7 +132,7 @@ export function useSettings() {
   }
 
   const removeCategory = async (cat: string) => {
-    const updated = categories.filter(c => c !== cat)
+    const updated = categories.filter((c) => c !== cat)
     await updateCategories(updated)
   }
 
@@ -118,7 +144,7 @@ export function useSettings() {
   }
 
   const removePaymentMode = async (mode: string) => {
-    const updated = paymentModes.filter(m => m !== mode)
+    const updated = paymentModes.filter((m) => m !== mode)
     await updatePaymentModes(updated)
   }
 

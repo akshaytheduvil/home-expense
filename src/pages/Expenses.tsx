@@ -7,6 +7,7 @@ import {
   Trash2,
   Copy,
   Download,
+  Upload,
   HardHat,
 } from 'lucide-react'
 import { useExpenses } from '@/hooks/useExpenses'
@@ -175,6 +176,17 @@ export const Expenses: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/settings')}
+            className="flex items-center space-x-1.5"
+            title="Bulk import expenses from CSV"
+          >
+            <Upload className="h-4 w-4" />
+            <span className="hidden sm:inline">Import CSV</span>
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
