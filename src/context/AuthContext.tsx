@@ -5,16 +5,22 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 interface AuthContextType {
   isAuthed: boolean
+  isAdmin: boolean
   currentAccount: Account
   accounts: Account[]
-  login: (pin: string) => { success: boolean; account?: Account }
+  login: (username: string, pin: string) => { success: boolean; error?: string; account?: Account }
   logout: () => void
-  switchAccount: (accountId: string) => void
-  updateAccount: (accountId: string, updates: { name?: string; pin?: string }) => Promise<boolean>
-  createAccount: (name: string, pin: string) => Promise<Account | null>
+  updateMyDisplayName: (newDisplayName: string) => Promise<boolean>
+  createCustomerAccount: (data: {
+    username: string
+    displayName: string
+    pin: string
+    phone?: string | null
+    notes?: string | null
+  }) => Promise<{ success: boolean; error?: string; account?: Account }>
+  updateAccount: (accountId: string, updates: Partial<Account>) => Promise<boolean>
   deleteAccount: (accountId: string) => Promise<boolean>
   currentPin: string
-  setNewPin: (newPin: string) => boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -27,7 +33,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (stored) {
         const parsed = JSON.parse(stored)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed
+          return parsed.map((a) => ({
+            ...a,
+            username: a.username || (a.id === 'primary' ? 'admin' : 'friend'),
+            displayName: a.displayName || a.name || 'Account',
+            role: a.role || (a.id === 'primary' ? 'admin' : 'customer'),
+            createdAt: a.createdAt || new Date().toISOString(),
+            isActive: a.isActive !== false,
+          }))
         }
       }
     } catch (e) {
@@ -57,7 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   })
 
-  // Sync accounts from Supabase settings
+  // Sync accounts from Supabase settings table
   const syncAccountsFromCloud = useCallback(async () => {
     if (!isSupabaseConfigured) return
     try {
@@ -73,18 +86,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data && Array.isArray(data.value) && data.value.length > 0) {
-        const cloudAccounts: Account[] = data.value
+        const cloudAccounts: Account[] = data.value.map((a: any) => ({
+          id: a.id,
+          username: a.username || (a.id === 'primary' ? 'admin' : 'user_' + a.id),
+          displayName: a.displayName || a.name || 'Account',
+          pin: a.pin,
+          role: a.role || (a.id === 'primary' ? 'admin' : 'customer'),
+          phone: a.phone || null,
+          notes: a.notes || null,
+          createdAt: a.createdAt || new Date().toISOString(),
+          isActive: a.isActive !== false,
+          isDefault: a.isDefault,
+        }))
+
         setAccounts(cloudAccounts)
         localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(cloudAccounts))
 
-        // Update current account reference if it exists in cloud accounts
         const activeId = localStorage.getItem(STORAGE_KEYS.ACTIVE_ACCOUNT)
         const matched = cloudAccounts.find((a) => a.id === activeId)
         if (matched) {
           setCurrentAccount(matched)
         }
       } else {
-        // First-time sync: upload default accounts to cloud
         await supabase.from('settings').upsert(
           {
             key: 'app_accounts',
@@ -102,7 +125,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     syncAccountsFromCloud()
 
-    // Listen to storage changes across browser tabs
     const handleStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_KEYS.AUTH) {
         setIsAuthed(e.newValue === 'ok')
@@ -127,7 +149,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAccounts(updated)
       localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(updated))
 
-      // Also update current account in state if modified
       const currentUpdated = updated.find((a) => a.id === currentAccount.id)
       if (currentUpdated) {
         setCurrentAccount(currentUpdated)
@@ -150,17 +171,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  const login = (enteredPin: string): { success: boolean; account?: Account } => {
-    const trimmed = enteredPin.trim()
-    const matched = accounts.find((a) => a.pin === trimmed)
-    if (matched) {
-      localStorage.setItem(STORAGE_KEYS.AUTH, 'ok')
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_ACCOUNT, matched.id)
-      setCurrentAccount(matched)
-      setIsAuthed(true)
-      return { success: true, account: matched }
+  /**
+   * Secure Login: Requires BOTH Username and 4-digit PIN.
+   */
+  const login = (
+    enteredUsername: string,
+    enteredPin: string
+  ): { success: boolean; error?: string; account?: Account } => {
+    const trimmedUser = enteredUsername.trim().toLowerCase()
+    const trimmedPin = enteredPin.trim()
+
+    if (!trimmedUser) {
+      return { success: false, error: 'Please enter your username' }
     }
-    return { success: false }
+    if (!/^\d{4}$/.test(trimmedPin)) {
+      return { success: false, error: 'Please enter your 4-digit PIN' }
+    }
+
+    const matched = accounts.find((a) => {
+      // Primary admin matches 'admin', 'akshay', 'home', or 'family'
+      const usernameMatch =
+        a.username.toLowerCase() === trimmedUser ||
+        (a.id === 'primary' && ['admin', 'akshay', 'home', 'family'].includes(trimmedUser))
+
+      return usernameMatch && a.pin === trimmedPin
+    })
+
+    if (!matched) {
+      return { success: false, error: 'Incorrect username or 4-digit PIN' }
+    }
+
+    if (matched.isActive === false) {
+      return { success: false, error: 'This account has been deactivated. Please contact Admin.' }
+    }
+
+    localStorage.setItem(STORAGE_KEYS.AUTH, 'ok')
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_ACCOUNT, matched.id)
+    localStorage.setItem(STORAGE_KEYS.LAST_USERNAME, enteredUsername.trim())
+    setCurrentAccount(matched)
+    setIsAuthed(true)
+    return { success: true, account: matched }
   }
 
   const logout = () => {
@@ -168,27 +218,80 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthed(false)
   }
 
-  const switchAccount = (accountId: string) => {
-    const found = accounts.find((a) => a.id === accountId)
-    if (found) {
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_ACCOUNT, found.id)
-      setCurrentAccount(found)
-    }
+  /**
+   * Customer self-service: update own family name / display name
+   */
+  const updateMyDisplayName = async (newDisplayName: string): Promise<boolean> => {
+    const trimmed = newDisplayName.trim()
+    if (!trimmed) return false
+
+    const updated = accounts.map((a) =>
+      a.id === currentAccount.id ? { ...a, displayName: trimmed } : a
+    )
+    return saveAccounts(updated)
   }
 
-  const updateAccount = async (
-    accountId: string,
-    updates: { name?: string; pin?: string }
-  ): Promise<boolean> => {
+  /**
+   * Admin: create new customer account with username, family name, 4-digit PIN
+   */
+  const createCustomerAccount = async (data: {
+    username: string
+    displayName: string
+    pin: string
+    phone?: string | null
+    notes?: string | null
+  }): Promise<{ success: boolean; error?: string; account?: Account }> => {
+    const trimmedUser = data.username.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
+    const trimmedDisplay = data.displayName.trim() || data.username.trim()
+    const trimmedPin = data.pin.trim()
+
+    if (!trimmedUser) {
+      return { success: false, error: 'Username must contain letters or numbers' }
+    }
+    if (!/^\d{4}$/.test(trimmedPin)) {
+      return { success: false, error: 'PIN must be exactly 4 digits' }
+    }
+
+    // Check duplicate username
+    if (accounts.some((a) => a.username.toLowerCase() === trimmedUser)) {
+      return { success: false, error: `Username "${trimmedUser}" is already taken` }
+    }
+
+    const newAccount: Account = {
+      id: 'acc_' + Date.now(),
+      username: trimmedUser,
+      displayName: trimmedDisplay,
+      pin: trimmedPin,
+      role: 'customer',
+      phone: data.phone?.trim() || null,
+      notes: data.notes?.trim() || null,
+      createdAt: new Date().toISOString(),
+      isActive: true,
+    }
+
+    const updated = [...accounts, newAccount]
+    const saved = await saveAccounts(updated)
+    if (!saved) {
+      return { success: false, error: 'Failed to save customer account' }
+    }
+    return { success: true, account: newAccount }
+  }
+
+  /**
+   * Admin: update any account's PIN, username, display name, or notes
+   */
+  const updateAccount = async (accountId: string, updates: Partial<Account>): Promise<boolean> => {
     if (updates.pin && !/^\d{4}$/.test(updates.pin)) {
       return false
     }
+
     const updated = accounts.map((a) => {
       if (a.id === accountId) {
         return {
           ...a,
-          name: updates.name?.trim() || a.name,
-          pin: updates.pin || a.pin,
+          ...updates,
+          username: updates.username ? updates.username.trim().toLowerCase() : a.username,
+          displayName: updates.displayName ? updates.displayName.trim() : a.displayName,
         }
       }
       return a
@@ -196,63 +299,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saveAccounts(updated)
   }
 
-  const createAccount = async (name: string, pin: string): Promise<Account | null> => {
-    const trimmedName = name.trim()
-    if (!trimmedName || !/^\d{4}$/.test(pin)) {
-      return null
-    }
-
-    // Check duplicate PIN to avoid collision during login
-    if (accounts.some((a) => a.pin === pin)) {
-      return null
-    }
-
-    const newAccount: Account = {
-      id: 'acc_' + Date.now(),
-      name: trimmedName,
-      pin,
-    }
-
-    const updated = [...accounts, newAccount]
-    const success = await saveAccounts(updated)
-    return success ? newAccount : null
-  }
-
+  /**
+   * Admin: delete a customer account (primary admin cannot be deleted)
+   */
   const deleteAccount = async (accountId: string): Promise<boolean> => {
-    if (accounts.length <= 1) return false
+    if (accountId === 'primary') return false
     const updated = accounts.filter((a) => a.id !== accountId)
     const success = await saveAccounts(updated)
-    if (success && currentAccount.id === accountId) {
-      const nextAcc = updated[0]
-      setCurrentAccount(nextAcc)
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_ACCOUNT, nextAcc.id)
-    }
     return success
   }
 
-  // Backwards compatibility for single-PIN helpers
+  const isAdmin = currentAccount.role === 'admin'
   const currentPin = currentAccount.pin || APP_PIN
-
-  const setNewPin = (newPin: string): boolean => {
-    if (!/^\d{4}$/.test(newPin)) return false
-    updateAccount(currentAccount.id, { pin: newPin })
-    return true
-  }
 
   return (
     <AuthContext.Provider
       value={{
         isAuthed,
+        isAdmin,
         currentAccount,
         accounts,
         login,
         logout,
-        switchAccount,
+        updateMyDisplayName,
+        createCustomerAccount,
         updateAccount,
-        createAccount,
         deleteAccount,
         currentPin,
-        setNewPin,
       }}
     >
       {children}

@@ -1,7 +1,13 @@
 export interface Account {
   id: string
-  name: string
+  username: string
+  displayName: string
   pin: string
+  role: 'admin' | 'customer'
+  phone?: string | null
+  notes?: string | null
+  createdAt: string
+  isActive?: boolean
   isDefault?: boolean
 }
 

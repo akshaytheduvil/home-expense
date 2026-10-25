@@ -5,20 +5,33 @@ export const APP_PIN = '3735'
 export const DEFAULT_ACCOUNTS: Account[] = [
   {
     id: 'primary',
-    name: 'My Account',
+    username: 'admin',
+    displayName: 'Akshay (Family)',
     pin: '3735',
+    role: 'admin',
+    phone: null,
+    notes: 'Primary Admin Family Account',
+    createdAt: '2026-10-06T15:28:40.000Z',
+    isActive: true,
     isDefault: true,
   },
   {
     id: 'friend',
-    name: "Friend's Account",
+    username: 'friend',
+    displayName: "Friend's Family",
     pin: '5555',
+    role: 'customer',
+    phone: null,
+    notes: 'First Customer Account',
+    createdAt: '2026-10-25T13:46:20.000Z',
+    isActive: true,
   },
 ]
 
 export const STORAGE_KEYS = {
   AUTH: 'home_expense_auth',
   ACTIVE_ACCOUNT: 'home_expense_active_account',
+  LAST_USERNAME: 'home_expense_last_username',
   ACCOUNTS: 'home_expense_accounts',
   CUSTOM_PIN: 'home_expense_custom_pin',
   THEME: 'home_expense_theme',

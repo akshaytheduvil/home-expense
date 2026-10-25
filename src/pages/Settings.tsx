@@ -19,6 +19,7 @@ import {
   Info,
   User,
   Users,
+  ShieldAlert,
 } from 'lucide-react'
 import { useSettings } from '@/hooks/useSettings'
 import { useWorkers } from '@/hooks/useWorkers'
@@ -31,7 +32,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { exportToCsv, downloadJson, formatCurrency, cn } from '@/lib/utils'
+import { exportToCsv, downloadJson, formatCurrency } from '@/lib/utils'
 import { parseAndCleanCsv } from '@/lib/csvParser'
 import { toast } from 'sonner'
 
@@ -41,25 +42,16 @@ export const Settings: React.FC = () => {
   const { workers, ensureWorkersExist } = useWorkers()
   const { expenses, bulkImportExpenses, clearAllExpenses } = useExpenses()
   const { theme, toggleTheme } = useTheme()
-  const {
-    currentAccount,
-    accounts,
-    switchAccount,
-    updateAccount,
-    createAccount,
-    deleteAccount,
-  } = useAuth()
+  const { currentAccount, isAdmin, updateMyDisplayName } = useAuth()
 
   // Dynamic add states
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newModeName, setNewModeName] = useState('')
 
-  // Multi-account states
-  const [newAccountName, setNewAccountName] = useState('')
-  const [newAccountPin, setNewAccountPin] = useState('')
-  const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
-  const [editAccName, setEditAccName] = useState('')
-  const [editAccPin, setEditAccPin] = useState('')
+  // Family / Display Name state
+  const [myFamilyNameInput, setMyFamilyNameInput] = useState(
+    currentAccount.displayName || currentAccount.username || ''
+  )
 
   // Danger delete modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
@@ -118,27 +110,6 @@ export const Settings: React.FC = () => {
     await addPaymentMode(newModeName.trim())
     toast.success(`Payment mode "${newModeName.trim()}" added`)
     setNewModeName('')
-  }
-
-  // Multi-Account Action handlers
-  const handleCreateAccount = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newAccountName.trim()) {
-      toast.error('Account name is required')
-      return
-    }
-    if (!/^\d{4}$/.test(newAccountPin)) {
-      toast.error('PIN must be exactly 4 digits')
-      return
-    }
-    const created = await createAccount(newAccountName.trim(), newAccountPin)
-    if (created) {
-      toast.success(`Account "${created.name}" created with PIN ${created.pin}!`)
-      setNewAccountName('')
-      setNewAccountPin('')
-    } else {
-      toast.error('Failed to create account (PIN may already be in use)')
-    }
   }
 
   // Data Export All CSV
@@ -449,221 +420,100 @@ export const Settings: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* F. MULTI-ACCOUNT & SECURITY */}
+        {/* F. ACCOUNT & SECURITY SETTINGS */}
         <Card className="md:col-span-2 shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
                 <CardTitle className="text-base font-bold flex items-center space-x-2">
-                  <Users className="h-4 w-4 text-primary" />
-                  <span>Accounts & Security PINs</span>
+                  {isAdmin ? (
+                    <ShieldAlert className="h-4 w-4 text-primary" />
+                  ) : (
+                    <User className="h-4 w-4 text-primary" />
+                  )}
+                  <span>{isAdmin ? 'Admin & Account Management' : 'My Family Account'}</span>
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Manage separate accounts. Expenses, workers, and categories are 100% isolated and never mix.
+                  {isAdmin
+                    ? 'Oversee system security, customer accounts, and access credentials.'
+                    : 'Manage your family name. Your expenses and workers are strictly isolated and private.'}
                 </CardDescription>
               </div>
               <Badge variant="blue" className="w-fit text-xs">
-                Active: {currentAccount.name}
+                {isAdmin ? 'System Administrator' : 'Private Customer Account'}
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* List of Accounts */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {accounts.map((acc) => {
-                const isActive = acc.id === currentAccount.id
-                const isEditing = editingAccountId === acc.id
+            {/* Customer Display Name Form */}
+            <div className="p-4 rounded-xl bg-secondary/50 border border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <div className="font-semibold text-sm text-foreground">
+                  {currentAccount.displayName || currentAccount.username}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Username: <strong className="font-mono text-primary">@{currentAccount.username}</strong>
+                  {isAdmin && (
+                    <>
+                      {' '}
+                      · PIN: <strong className="font-mono">{currentAccount.pin}</strong>
+                    </>
+                  )}
+                </div>
+              </div>
 
-                return (
-                  <div
-                    key={acc.id}
-                    className={cn(
-                      'p-3.5 rounded-xl border transition-all flex flex-col justify-between space-y-3',
-                      isActive
-                        ? 'border-primary bg-primary/5 shadow-xs'
-                        : 'border-border bg-card hover:bg-accent/30'
-                    )}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center space-x-2.5">
-                        <div
-                          className={cn(
-                            'h-9 w-9 rounded-lg flex items-center justify-center font-bold text-sm shrink-0',
-                            isActive
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-secondary text-foreground'
-                          )}
-                        >
-                          <User className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-sm text-foreground flex items-center space-x-1.5">
-                            <span>{acc.name}</span>
-                            {isActive && (
-                              <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold px-1.5 py-0.5 rounded">
-                                ACTIVE
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            PIN: <strong className="font-mono text-foreground">{acc.pin}</strong>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-1">
-                        {!isEditing && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
-                            onClick={() => {
-                              setEditingAccountId(acc.id)
-                              setEditAccName(acc.name)
-                              setEditAccPin(acc.pin)
-                            }}
-                          >
-                            Edit
-                          </Button>
-                        )}
-                        {!isActive && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 px-2.5 text-xs text-primary"
-                            onClick={() => {
-                              switchAccount(acc.id)
-                              toast.success(`Switched to "${acc.name}"`)
-                            }}
-                          >
-                            Switch
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Inline Edit Form for this Account */}
-                    {isEditing && (
-                      <div className="pt-2 border-t border-border space-y-2 animate-in fade-in">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-[10px]">Account Name</Label>
-                            <Input
-                              value={editAccName}
-                              onChange={(e) => setEditAccName(e.target.value)}
-                              placeholder="Account name"
-                              className="h-8 text-xs mt-0.5"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-[10px]">4-Digit PIN</Label>
-                            <Input
-                              value={editAccPin}
-                              onChange={(e) =>
-                                setEditAccPin(e.target.value.replace(/\D/g, '').slice(0, 4))
-                              }
-                              maxLength={4}
-                              placeholder="PIN"
-                              className="h-8 text-xs font-mono mt-0.5"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-1">
-                          {accounts.length > 1 && !acc.isDefault ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-[11px] text-destructive hover:bg-destructive/10"
-                              onClick={async () => {
-                                if (confirm(`Delete account "${acc.name}"?`)) {
-                                  await deleteAccount(acc.id)
-                                  setEditingAccountId(null)
-                                  toast.success('Account removed')
-                                }
-                              }}
-                            >
-                              Delete
-                            </Button>
-                          ) : (
-                            <div />
-                          )}
-
-                          <div className="flex space-x-1.5">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={() => setEditingAccountId(null)}
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="h-7 px-2.5 text-xs"
-                              onClick={async () => {
-                                if (!editAccName.trim()) {
-                                  toast.error('Account name is required')
-                                  return
-                                }
-                                if (!/^\d{4}$/.test(editAccPin)) {
-                                  toast.error('PIN must be exactly 4 digits')
-                                  return
-                                }
-                                const ok = await updateAccount(acc.id, {
-                                  name: editAccName,
-                                  pin: editAccPin,
-                                })
-                                if (ok) {
-                                  setEditingAccountId(null)
-                                  toast.success(`Account "${editAccName}" updated`)
-                                } else {
-                                  toast.error('Failed to update account')
-                                }
-                              }}
-                            >
-                              Save
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Create New Account */}
-            <div className="pt-3 border-t border-border">
-              <h5 className="text-xs font-semibold text-foreground mb-2 flex items-center space-x-1.5">
-                <Plus className="h-3.5 w-3.5 text-primary" />
-                <span>Create New Account</span>
-              </h5>
-              <form onSubmit={handleCreateAccount} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="flex items-center space-x-2">
                 <Input
-                  value={newAccountName}
-                  onChange={(e) => setNewAccountName(e.target.value)}
-                  placeholder="e.g. Friend, Office, Home 2"
-                  className="h-9 text-xs"
+                  value={myFamilyNameInput}
+                  onChange={(e) => setMyFamilyNameInput(e.target.value)}
+                  placeholder="Update family name"
+                  className="h-8 text-xs max-w-xs"
                 />
-                <Input
-                  value={newAccountPin}
-                  onChange={(e) =>
-                    setNewAccountPin(e.target.value.replace(/\D/g, '').slice(0, 4))
-                  }
-                  maxLength={4}
-                  placeholder="New 4-digit PIN"
-                  className="h-9 text-xs font-mono"
-                />
-                <Button type="submit" size="sm" className="h-9 text-xs">
-                  <Plus className="h-3.5 w-3.5 mr-1" />
-                  <span>Add Account</span>
+                <Button
+                  size="sm"
+                  className="h-8 text-xs shrink-0"
+                  onClick={async () => {
+                    if (!myFamilyNameInput.trim()) {
+                      toast.error('Family name cannot be blank')
+                      return
+                    }
+                    const ok = await updateMyDisplayName(myFamilyNameInput.trim())
+                    if (ok) toast.success('Family name updated!')
+                    else toast.error('Failed to update family name')
+                  }}
+                >
+                  Save Name
                 </Button>
-              </form>
+              </div>
             </div>
+
+            {/* Admin Panel Direct Link (Only visible to Akshay the Admin) */}
+            {isAdmin && (
+              <div className="pt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 bg-blue-500/5 rounded-xl border border-blue-500/20">
+                <div className="flex items-center space-x-2.5">
+                  <div className="h-8 w-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold text-xs shrink-0">
+                    <Users className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-foreground">
+                      Customer Accounts & Live Admin Panel
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Issue new usernames, view credentials, and oversee customer ledgers.
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  size="sm"
+                  onClick={() => navigate('/admin')}
+                  className="text-xs shrink-0 bg-primary text-primary-foreground"
+                >
+                  <span>Open Live Admin Panel</span>
+                  <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

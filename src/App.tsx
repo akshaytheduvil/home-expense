@@ -13,6 +13,7 @@ import { EditExpense } from '@/pages/EditExpense'
 import { Workers } from '@/pages/Workers'
 import { WorkerLedger } from '@/pages/WorkerLedger'
 import { Settings } from '@/pages/Settings'
+import { AdminPanel } from '@/pages/AdminPanel'
 import { Skeleton } from '@/components/ui/skeleton'
 
 // Lazy load Summary page as required for bundle performance
@@ -33,6 +34,7 @@ const TitleUpdater: React.FC = () => {
       '/summary': 'Summary & Analytics — Home Expense',
       '/workers': 'Workers & Vendors — Home Expense',
       '/settings': 'Settings — Home Expense',
+      '/admin': 'Admin Panel — Home Expense',
     }
 
     if (location.pathname.startsWith('/workers/') && location.pathname !== '/workers') {
@@ -91,6 +93,7 @@ export function App() {
                 }
               />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/admin" element={<AdminPanel />} />
             </Route>
 
             {/* Fallback */}
