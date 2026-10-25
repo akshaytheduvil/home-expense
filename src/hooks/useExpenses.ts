@@ -70,41 +70,21 @@ export function useExpenses() {
     }
 
     try {
-      // 1. Query with account_id filter if column exists
-      let query = supabase.from('expenses').select('*')
-      if (accountId === 'primary') {
-        query = query.or('account_id.eq.primary,account_id.is.null')
-      } else {
-        query = query.eq('account_id', accountId)
-      }
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .order('date', { ascending: false })
 
-      let { data, error } = await query.order('date', { ascending: false })
+      if (error) throw error
 
-      // 2. Fallback if account_id column is not yet in Postgres schema
-      if (error && error.code === 'PGRST204') {
-        const fallback = await supabase
-          .from('expenses')
-          .select('*')
-          .order('date', { ascending: false })
-
-        if (fallback.error) throw fallback.error
-
-        data = (fallback.data || [])
-          .filter((item) => matchesAccount(item, accountId))
-          .map((item) => ({
-            ...item,
-            notes: cleanNotes(item.notes),
-          }))
-      } else if (error) {
-        throw error
-      } else if (data) {
-        data = data.map((item) => ({
+      const filtered = (data || [])
+        .filter((item) => matchesAccount(item, accountId))
+        .map((item) => ({
           ...item,
           notes: cleanNotes(item.notes),
         }))
-      }
 
-      setExpenses(data || [])
+      setExpenses(filtered)
       setIsLive(true)
     } catch (err) {
       console.warn('Supabase fetchExpenses failed, falling back to local:', err)
@@ -202,40 +182,27 @@ export function useExpenses() {
       return newExpense
     }
 
-    // Try inserting with native account_id column
-    const insertPayload: any = {
-      ...expenseData,
-      account_id: accountId,
+    const tag = accountId === 'primary' ? '' : `[acc:${accountId}] `
+    const notes = (tag + (expenseData.notes || '')).trim() || null
+
+    const payload = {
+      date: expenseData.date,
+      category: expenseData.category,
+      product_name: expenseData.product_name || null,
+      amount: expenseData.amount,
+      worker_name: expenseData.worker_name || null,
+      payment_mode: expenseData.payment_mode || 'Cash',
+      description: expenseData.description || null,
+      notes,
     }
 
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('expenses')
-      .insert([insertPayload])
+      .insert([payload])
       .select()
       .single()
 
-    // Fallback if column does not exist yet
-    if (error && error.code === 'PGRST204') {
-      const tag = accountId === 'primary' ? '' : `[acc:${accountId}] `
-      const notes = (tag + (expenseData.notes || '')).trim() || null
-
-      const fallbackPayload = {
-        date: expenseData.date,
-        category: expenseData.category,
-        product_name: expenseData.product_name || null,
-        amount: expenseData.amount,
-        worker_name: expenseData.worker_name || null,
-        payment_mode: expenseData.payment_mode || 'Cash',
-        description: expenseData.description || null,
-        notes,
-      }
-
-      const res = await supabase.from('expenses').insert([fallbackPayload]).select().single()
-      if (res.error) throw res.error
-      data = { ...res.data, notes: cleanNotes(res.data.notes) }
-    } else if (error) {
-      throw error
-    }
+    if (error) throw error
 
     const cleanedData: Expense = {
       ...data,
@@ -261,7 +228,8 @@ export function useExpenses() {
       return
     }
 
-    let updatePayload: any = { ...updates }
+    const { account_id: _acc, ...validUpdates } = updates as any
+    let updatePayload: any = { ...validUpdates }
     if (accountId !== 'primary' && updates.notes !== undefined) {
       updatePayload.notes = `[acc:${accountId}] ${updates.notes || ''}`.trim() || null
     }
@@ -295,36 +263,10 @@ export function useExpenses() {
       return
     }
 
-    // Strictly scope delete operation to active account ONLY
-    if (accountId === 'primary') {
-      const { error } = await supabase
-        .from('expenses')
-        .delete()
-        .or('account_id.eq.primary,account_id.is.null')
-
-      // Fallback if column not yet in DB: delete items for this account
-      if (error && error.code === 'PGRST204') {
-        const ids = expenses.map((e) => e.id)
-        if (ids.length > 0) {
-          await supabase.from('expenses').delete().in('id', ids)
-        }
-      } else if (error) {
-        throw error
-      }
-    } else {
-      const { error } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('account_id', accountId)
-
-      if (error && error.code === 'PGRST204') {
-        const ids = expenses.map((e) => e.id)
-        if (ids.length > 0) {
-          await supabase.from('expenses').delete().in('id', ids)
-        }
-      } else if (error) {
-        throw error
-      }
+    const ids = expenses.map((e) => e.id)
+    if (ids.length > 0) {
+      const { error } = await supabase.from('expenses').delete().in('id', ids)
+      if (error) throw error
     }
 
     setExpenses([])
@@ -342,7 +284,6 @@ export function useExpenses() {
       } else {
         validItems.push({
           ...item,
-          account_id: accountId,
         })
       }
     })
@@ -364,26 +305,20 @@ export function useExpenses() {
       return { inserted: created.length, errors }
     }
 
-    const { error } = await supabase.from('expenses').insert(validItems)
+    const tag = accountId === 'primary' ? '' : `[acc:${accountId}] `
+    const payloadItems = validItems.map((v) => ({
+      date: v.date,
+      category: v.category,
+      product_name: v.product_name || null,
+      amount: v.amount,
+      worker_name: v.worker_name || null,
+      payment_mode: v.payment_mode || 'Cash',
+      description: v.description || null,
+      notes: (tag + (v.notes || '')).trim() || null,
+    }))
 
-    if (error && error.code === 'PGRST204') {
-      // Fallback if column not yet added
-      const tag = accountId === 'primary' ? '' : `[acc:${accountId}] `
-      const fallbackItems = validItems.map((v) => ({
-        date: v.date,
-        category: v.category,
-        product_name: v.product_name || null,
-        amount: v.amount,
-        worker_name: v.worker_name || null,
-        payment_mode: v.payment_mode || 'Cash',
-        description: v.description || null,
-        notes: (tag + (v.notes || '')).trim() || null,
-      }))
-      const fallbackRes = await supabase.from('expenses').insert(fallbackItems)
-      if (fallbackRes.error) throw fallbackRes.error
-    } else if (error) {
-      throw error
-    }
+    const { error } = await supabase.from('expenses').insert(payloadItems)
+    if (error) throw error
 
     await fetchExpenses()
     return { inserted: validItems.length, errors }

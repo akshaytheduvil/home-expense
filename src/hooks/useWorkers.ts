@@ -70,36 +70,21 @@ export function useWorkers() {
     }
 
     try {
-      let query = supabase.from('workers').select('*')
-      if (accountId === 'primary') {
-        query = query.or('account_id.eq.primary,account_id.is.null')
-      } else {
-        query = query.eq('account_id', accountId)
-      }
+      const { data, error: sbError } = await supabase
+        .from('workers')
+        .select('*')
+        .order('name', { ascending: true })
 
-      let { data, error: sbError } = await query.order('name', { ascending: true })
+      if (sbError) throw sbError
 
-      if (sbError && sbError.code === 'PGRST204') {
-        // Fallback if column not yet added
-        const fallback = await supabase.from('workers').select('*').order('name', { ascending: true })
-        if (fallback.error) throw fallback.error
-
-        data = (fallback.data || [])
-          .filter((w) => matchesWorkerAccount(w, accountId))
-          .map((w) => ({
-            ...w,
-            notes: cleanWorkerNotes(w.notes),
-          }))
-      } else if (sbError) {
-        throw sbError
-      } else if (data) {
-        data = data.map((w) => ({
+      const filtered = (data || [])
+        .filter((w) => matchesWorkerAccount(w, accountId))
+        .map((w) => ({
           ...w,
           notes: cleanWorkerNotes(w.notes),
         }))
-      }
 
-      setWorkers(data || [])
+      setWorkers(filtered)
     } catch (err: unknown) {
       console.warn('Supabase fetchWorkers failed, falling back to local:', err)
       const local = getLocalWorkers()
@@ -137,31 +122,20 @@ export function useWorkers() {
       return newWorker
     }
 
-    const payload: any = {
-      name: trimmed,
-      phone: phone || null,
-      notes: notes || null,
-      account_id: accountId,
-    }
+    const tag = accountId === 'primary' ? '' : `[acc:${accountId}] `
+    const fallbackNotes = (tag + (notes || '')).trim() || null
 
-    let { data, error: sbError } = await supabase.from('workers').insert([payload]).select().single()
+    const { data, error: sbError } = await supabase
+      .from('workers')
+      .insert([{ name: trimmed, phone: phone || null, notes: fallbackNotes }])
+      .select()
+      .single()
 
-    if (sbError && sbError.code === 'PGRST204') {
-      const tag = accountId === 'primary' ? '' : `[acc:${accountId}] `
-      const fallbackNotes = (tag + (notes || '')).trim() || null
-      const fallbackRes = await supabase
-        .from('workers')
-        .insert([{ name: trimmed, phone: phone || null, notes: fallbackNotes }])
-        .select()
-        .single()
-      if (fallbackRes.error) throw fallbackRes.error
-      data = { ...fallbackRes.data, notes: cleanWorkerNotes(fallbackRes.data.notes) }
-    } else if (sbError) {
-      throw sbError
-    }
+    if (sbError) throw sbError
 
     const cleaned: Worker = {
       ...data,
+      account_id: accountId,
       notes: cleanWorkerNotes(data.notes),
     }
 
@@ -176,7 +150,9 @@ export function useWorkers() {
       return
     }
 
-    let updatePayload: any = { ...updates }
+    const { account_id: _acc, ...validUpdates } = updates as any
+
+    let updatePayload: any = { ...validUpdates }
     if (accountId !== 'primary' && updates.notes !== undefined) {
       updatePayload.notes = `[acc:${accountId}] ${updates.notes || ''}`.trim() || null
     }
@@ -223,10 +199,10 @@ export function useWorkers() {
       return newNames.length
     }
 
-    // Try upserting with account_id
+    const tag = accountId === 'primary' ? null : `[acc:${accountId}]`
     const upsertPayload = newNames.map((name) => ({
       name,
-      account_id: accountId,
+      notes: tag,
     }))
 
     const { error: sbError } = await supabase.from('workers').upsert(upsertPayload, {
@@ -234,13 +210,7 @@ export function useWorkers() {
       ignoreDuplicates: true,
     })
 
-    if (sbError && sbError.code === 'PGRST204') {
-      const tag = accountId === 'primary' ? null : `[acc:${accountId}]`
-      await supabase.from('workers').upsert(
-        newNames.map((name) => ({ name, notes: tag })),
-        { onConflict: 'name', ignoreDuplicates: true }
-      )
-    }
+    if (sbError) throw sbError
 
     await fetchWorkers()
     return newNames.length

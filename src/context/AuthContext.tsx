@@ -189,10 +189,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const matched = accounts.find((a) => {
-      // Primary admin matches 'admin', 'akshay', 'home', or 'family'
+      // Primary admin matches 'admin', 'akshay', 'home', 'family', or '3735'
       const usernameMatch =
         a.username.toLowerCase() === trimmedUser ||
-        (a.id === 'primary' && ['admin', 'akshay', 'home', 'family'].includes(trimmedUser))
+        (a.id === 'primary' && ['admin', 'akshay', 'home', 'family', '3735'].includes(trimmedUser))
 
       return usernameMatch && a.pin === trimmedPin
     })
